@@ -6,7 +6,7 @@ def readfile(fname):
 
 setup(
     name='epub-conversion',
-    version='1.0.1',
+    version='1.0.5',
     description='Python package for converting xml and epubs to text files',
     long_description=readfile('README.md'),
     ext_modules=[],
@@ -14,15 +14,14 @@ setup(
     py_modules = [],
     author='Jonathan Raiman',
     author_email='jraiman at mit dot edu',
-    url='',
-    download_url='',
+    url='https://github.com/JonathanRaiman/epub_conversion',
+    download_url='https://github.com/JonathanRaiman/epub_conversion',
     keywords='XML, epub, tokenization, NLP',
     license='MIT',
     platforms='any',
     zip_safe=False,
     classifiers=[
         'Intended Audience :: Science/Research',
-        'License :: MIT',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3.3',
         'Topic :: Text Processing :: Linguistic',

@@ -135,15 +135,11 @@ class WikiReaderState:
 
 	def mark_seen_filtered_article(self):
 		self.filtered_articles_seen += 1
-
-		freq = 0.0
-			
 		if self.filtered_articles_seen % self.report_every == 0:
 			freq = self.filtered_articles_seen /(time.time() - self.start_time)
-
-		if self.clear_output:
-			clear_output_ipython(wait=True)
-		print("%d articles seen so far. Processing %.3f articles / s : position %r" % (self.filtered_articles_seen, freq, self.file.tell()))
+			if self.clear_output:
+				clear_output_ipython(wait=True)
+			print("%d articles seen so far. Processing %.3f articles / s : position %r" % (self.filtered_articles_seen, freq, self.file.tell()))
 
 	def reset_state(self):
 		"""
@@ -182,6 +178,49 @@ class WikiReaderState:
 		print("disambiguation %r"   % (self.disambiguation_page))
 		print("special_page   %r"   % (self.namespace_page))
 
+def get_redirection_list(wiki,
+	encoding="utf-8",
+	element = "page",
+	max_articles = 9999999999999999,
+	maxlines = 9999999999999999,
+	offset = 0):
+
+	state = WikiReaderState(wiki, report_every = 100000000, clear_output = False)
+
+	start_element_node       = "<%s" % (element)
+	end_element_node         = "</%s>" % (element)
+
+	redirect_to = None
+
+	for line in wiki:
+		line = line.decode(encoding)
+		state.enter_line()
+
+		if state.lines_seen > maxlines:
+			break
+
+		if line.find("<redirect") != -1:
+			state.mark_redirection()
+			redirect_to = line.split('"')[1]
+			continue
+
+		if line.find(start_element_node) != -1:
+			state.enter_page()
+			if state.filtered_articles_seen >= max_articles:
+				break
+			continue
+
+		if state.in_page and line.find("<title>") != -1:
+			state.observe_title_line(line)
+			continue
+
+		if line.find(end_element_node) != -1:
+			if state.redirection_page:
+				state.mark_seen_filtered_article()
+				yield (state.current_title, redirect_to)
+			redirect_to = None
+			state.exit_page()
+			continue
 
 def convert_wiki_to_lines(wiki,
 	skip_cdata = False,
