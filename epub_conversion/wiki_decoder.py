@@ -2,7 +2,11 @@ from .utils import convert_lines_to_text
 from xml.etree.cElementTree import fromstring
 import gzip, time, re
 from contextlib import closing
-from IPython.display import clear_output as clear_output_ipython
+try:
+	from IPython.display import clear_output as clear_output_ipython
+except ImportError:
+	def clear_output_ipython(*args, **kwargs):
+		pass
 from bz2file import BZ2File
 from os import path
 
