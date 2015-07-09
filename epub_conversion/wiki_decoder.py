@@ -235,6 +235,7 @@ def convert_wiki_to_lines(wiki,
 	report_every = 100,
 	clear_output = True,
 	parse_special_pages = False,
+	skip_templated_lines = True,
 	max_articles = 9999999999999999,
 	maxlines = 9999999999999999,
 	offset = 0):
@@ -284,7 +285,7 @@ def convert_wiki_to_lines(wiki,
 			state.exit_page()
 			continue
 
-		if state.inside_text and line_is_agreeable(line):
+		if state.inside_text and (not skip_templated_lines or line_is_agreeable(line)):
 			current_article += line.replace("\xa0", " ").replace("&quot;", '"').replace("&gt;", ">").replace("&lt;", "<").replace("&amp;nbsp;", " ").replace("&amp;", "&")
 			if line.find(end_inner_element_node) != -1:
 				state.exit_text()
