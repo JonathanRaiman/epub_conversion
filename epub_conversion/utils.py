@@ -1,7 +1,7 @@
 import os
 from xml_cleaner import to_raw_text
 from epub import open_epub, BadEpubFile
-from zipfile import BadZipFile
+from zipfile import BadZipfile
 
 def get_files_from_path(filetype, path):
 	"""
