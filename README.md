@@ -23,7 +23,7 @@ Then using this converter let's concatenate all the text within the ebooks into 
 
 You can also proceed line by line:
 
-	from epub_conversion.utils import open_book
+	from epub_conversion.utils import open_book, convert_epub_to_lines
 
 	book = open_book("twilight.epub")
 

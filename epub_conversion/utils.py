@@ -35,7 +35,7 @@ def try_decode(ebook, item):
 def open_book(path):
 	try:
 		return open_epub(path)
-	except (BadEpubFile, BadZipFile, KeyError, IndexError):
+	except (BadEpubFile, BadZipfile, KeyError, IndexError):
 		return None
 
 def convert_xml_element_to_lines(data, boundary):
