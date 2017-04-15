@@ -1,7 +1,7 @@
 import os
 from xml_cleaner import to_raw_text
 from epub import open_epub, BadEpubFile
-from zipfile import BadZipFile
+from zipfile import BadZipfile
 
 def get_files_from_path(filetype, path):
 	"""
@@ -35,7 +35,7 @@ def try_decode(ebook, item):
 def open_book(path):
 	try:
 		return open_epub(path)
-	except (BadEpubFile, BadZipFile, KeyError, IndexError):
+	except (BadEpubFile, BadZipfile, KeyError, IndexError):
 		return None
 
 def convert_xml_element_to_lines(data, boundary):
