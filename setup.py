@@ -11,6 +11,7 @@ setup(
     version='1.0.8',
     description='Python package for converting xml and epubs to text files',
     long_description=readfile('README.md'),
+    long_description_content_type="text/markdown",
     ext_modules=[],
     packages=find_packages(),
     py_modules=[],
