@@ -15,7 +15,7 @@ setup(
     packages=find_packages(),
     py_modules=[],
     author='Jonathan Raiman',
-    author_email='jraiman at mit dot edu',
+    author_email='jonathanraiman@gmail.com',
     url='https://github.com/JonathanRaiman/epub_conversion',
     download_url='https://github.com/JonathanRaiman/epub_conversion',
     keywords='XML, epub, tokenization, NLP',
