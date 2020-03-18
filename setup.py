@@ -8,7 +8,7 @@ def readfile(fname):
 
 setup(
     name='epub-conversion',
-    version='1.0.9',
+    version='1.0.15',
     description='Python package for converting xml and epubs to text files',
     long_description=readfile('README.md'),
     long_description_content_type="text/markdown",

@@ -3,6 +3,8 @@ from xml.etree.cElementTree import fromstring
 import gzip
 import time
 import re
+import math
+import io
 from contextlib import closing
 try:
     from IPython.display import clear_output as clear_output_ipython
@@ -10,7 +12,9 @@ except ImportError:
     def clear_output_ipython(*args, **kwargs):
         pass
 from bz2file import BZ2File
-from os import path
+from os import path, stat
+from multiprocessing import cpu_count, Process, Queue
+
 
 Namespaces = [
     "WP", "Aide", "Help", "Talk", "User", "Template", "Wikipedia",
@@ -99,11 +103,12 @@ class WikiReaderState:
     contents of an xml dump line by line
     """
 
-    def __init__(self, file, report_every=100, clear_output=True):
+    def __init__(self, file, verbose, report_every=100, clear_output=True):
         # parameters & input
         self.file = file
         self.report_every = report_every
         self.clear_output = clear_output
+        self.verbose = verbose
 
         # state
         self.reset_state()
@@ -150,10 +155,11 @@ class WikiReaderState:
         self.filtered_articles_seen += 1
         if self.filtered_articles_seen % self.report_every == 0:
             freq = self.filtered_articles_seen / (time.time() - self.start_time)
-            if self.clear_output:
-                clear_output_ipython(wait=True)
-            print("%d articles seen so far. Processing %.3f articles / s : position %r" % (
-                self.filtered_articles_seen, freq, self.file.tell()))
+            if self.verbose:
+                if self.clear_output:
+                    clear_output_ipython(wait=True)
+                print("%d articles seen so far. Processing %.3f articles / s : position %r" % (
+                    self.filtered_articles_seen, freq, self.file.tell()))
 
     def reset_state(self):
         """
@@ -197,11 +203,9 @@ def get_redirection_list(wiki,
                          encoding="utf-8",
                          element="page",
                          max_articles=9999999999999999,
-                         maxlines=9999999999999999,
-                         offset=0):
+                         maxlines=9999999999999999):
 
-    state = WikiReaderState(wiki, report_every=100000000, clear_output=False)
-
+    state = WikiReaderState(wiki, verbose=True, report_every=100000000, clear_output=False)
     start_element_node = "<%s" % (element)
     end_element_node = "</%s>" % (element)
 
@@ -238,22 +242,14 @@ def get_redirection_list(wiki,
             continue
 
 
-def convert_wiki_to_lines(wiki,
-                          skip_cdata=False,
-                          line_converter=convert_lines_to_text,
-                          encoding="utf-8",
-                          inner_element="text",
-                          element="page",
-                          report_every=100,
-                          clear_output=True,
-                          parse_special_pages=False,
-                          skip_templated_lines=True,
-                          max_articles=9999999999999999,
-                          maxlines=9999999999999999,
-                          offset=0):
-
-    state = WikiReaderState(wiki, report_every=report_every, clear_output=clear_output)
-
+def convert_wiki_to_lines_inner_generator(wiki, verbose, report_every, clear_output, skip_cdata,
+                                          encoding, inner_element, element, parse_special_pages,
+                                          skip_templated_lines, maxlines, max_articles, job):
+    # do sequential processing
+    start, end = job
+    if start is not None:
+        wiki.seek(start)
+    state = WikiReaderState(wiki, verbose=verbose, report_every=report_every, clear_output=clear_output)
     current_article = ''
     start_element_node = "<%s" % (element)
     start_inner_element_node = "<%s" % (inner_element)
@@ -261,10 +257,12 @@ def convert_wiki_to_lines(wiki,
     end_element_node = "</%s>" % (element)
 
     for line in wiki:
+        if end is not None:
+            current_pos = wiki.tell()
         line = line.decode(encoding)
         state.enter_line()
 
-        if state.lines_seen > maxlines:
+        if maxlines is not None and state.lines_seen > maxlines:
             break
 
         if skip_cdata:
@@ -277,7 +275,7 @@ def convert_wiki_to_lines(wiki,
 
         if line.find(start_element_node) != -1:
             state.enter_page()
-            if state.filtered_articles_seen >= max_articles:
+            if (end is not None and current_pos > end) or max_articles is not None and state.filtered_articles_seen >= max_articles:
                 break
             continue
 
@@ -295,10 +293,9 @@ def convert_wiki_to_lines(wiki,
                 line = line[endpos + 1:]
 
         if line.find(end_element_node) != -1:
-            if state.articles_seen > offset and (parse_special_pages or not state.is_special()):
+            if parse_special_pages or not state.is_special():
                 state.mark_seen_filtered_article()
-                for subline in line_converter(current_article, state.current_title):
-                    yield subline
+                
             current_article = ''
             state.exit_page()
             continue
@@ -319,3 +316,69 @@ def convert_wiki_to_lines(wiki,
 
         if state.inside_text and line.find(end_inner_element_node) != -1:
             state.exit_text()
+
+
+def convert_wiki_to_lines_inner_queue(result_queue, path, *args):
+    with open(path, "rb") as wiki:
+        for res in convert_wiki_to_lines_inner_generator(wiki, *args):
+            result_queue.put((current_article, state.current_title))
+    result_queue.put(None)
+
+
+def convert_wiki_to_lines(wiki,
+                          skip_cdata=False,
+                          line_converter=convert_lines_to_text,
+                          encoding="utf-8",
+                          inner_element="text",
+                          element="page",
+                          report_every=100,
+                          clear_output=True,
+                          parse_special_pages=False,
+                          skip_templated_lines=True,
+                          max_articles=9999999999999999,
+                          maxlines=9999999999999999,
+                          parallel=True):
+    if parallel and isinstance(wiki, io.BufferedReader):
+        n_workers = cpu_count()
+        result_queue = Queue()
+        fname = wiki.name
+        total_size = stat(fname).st_size
+        jobs = []
+        so_far = 0
+        for i in range(n_workers):
+            chunksize = math.ceil(total_size / n_workers)
+            jobs.append((so_far, so_far + chunksize))
+            so_far = so_far + chunksize
+
+        workers = [Process(target=convert_wiki_to_lines_inner_queue,
+                           args=(result_queue, fname, False, report_every, clear_output, skip_cdata, encoding, inner_element, element,
+                                 parse_special_pages, skip_templated_lines, None, None, job))
+                   for job in jobs]
+        for worker in workers:
+            worker.start()
+        done = 0
+        articles_emitted = 0
+        state = WikiReaderState(None, verbose=True, report_every=report_every, clear_output=clear_output)
+        while True:
+            res = result_queue.get()
+            state.mark_seen_filtered_article()
+            if res is None:
+                done += 1
+                if done == n_workers:
+                    break
+            else:
+                articles_emitted += 1
+                if articles_emitted > max_articles:
+                    break
+                article, title = res
+                for subline in line_converter(article, title):
+                    yield subline
+        for worker in workers:
+            worker.join()
+    else:
+        # do sequential processing
+        for article, title in convert_wiki_to_lines_inner_generator(wiki, True, report_every, clear_output, skip_cdata, encoding, inner_element, element,
+                                                                    parse_special_pages, skip_templated_lines, maxlines,
+                                                                    max_articles, (None, None)):
+            for subline in line_converter(article, title):
+                yield subline
