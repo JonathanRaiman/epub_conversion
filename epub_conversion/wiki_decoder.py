@@ -285,8 +285,14 @@ def convert_wiki_to_lines(wiki,
             state.observe_title_line(line)
             continue
 
-        if (parse_special_pages or not state.is_special()) and line.find(start_inner_element_node) != -1:
-            state.enter_text()
+        if (parse_special_pages or not state.is_special()):
+            start_pos = line.find(start_inner_element_node)
+            if start_pos != -1:
+                state.enter_text()
+
+                line = line[start_pos + len(start_inner_element_node):]
+                endpos = line.find(">")
+                line = line[endpos + 1:]
 
         if line.find(end_element_node) != -1:
             if state.articles_seen > offset and (parse_special_pages or not state.is_special()):
@@ -298,13 +304,16 @@ def convert_wiki_to_lines(wiki,
             continue
 
         if state.inside_text and (not skip_templated_lines or line_is_agreeable(line)):
+            endpos = line.find(end_inner_element_node)
+            if endpos != -1:
+                line = line[:endpos]
             current_article += (line.replace("\xa0", " ")
                                     .replace("&quot;", '"')
                                     .replace("&gt;", ">")
                                     .replace("&lt;", "<")
                                     .replace("&amp;nbsp;", " ")
                                     .replace("&amp;", "&"))
-            if line.find(end_inner_element_node) != -1:
+            if endpos != -1:
                 state.exit_text()
             continue
 
